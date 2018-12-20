@@ -585,3 +585,38 @@ func (s *RdsService) NotFoundDBInstance(err error) bool {
 
 	return false
 }
+
+func (s *RdsService) DescribeDBBackups(request *rds.DescribeBackupsRequest) ([]rds.Backup, error) {
+
+	var dbBackups []rds.Backup
+
+	for {
+		raw, err := s.client.WithRdsClient(func(rdsClient *rds.Client) (interface{}, error) {
+			return rdsClient.DescribeBackups(request)
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp, _ := raw.(*rds.DescribeBackupsResponse)
+		if resp == nil || len(resp.Items.Backup) < 1 {
+			break
+		}
+
+		for _, item := range resp.Items.Backup {
+
+			dbBackups = append(dbBackups, item)
+		}
+
+		if len(resp.Items.Backup) < PageSizeLarge {
+			break
+		}
+
+		if page, err := getNextpageNumber(request.PageNumber); err != nil {
+			return nil, err
+		} else {
+			request.PageNumber = page
+		}
+	}
+
+	return dbBackups, nil
+}

@@ -76,17 +76,17 @@ func (client *Client) DescribeSlowLogsWithCallback(request *DescribeSlowLogsRequ
 // DescribeSlowLogsRequest is the request struct for api DescribeSlowLogs
 type DescribeSlowLogsRequest struct {
 	*requests.RpcRequest
-	OwnerId              requests.Integer `position:"Query" name:"OwnerId"`
-	ResourceOwnerAccount string           `position:"Query" name:"ResourceOwnerAccount"`
 	ResourceOwnerId      requests.Integer `position:"Query" name:"ResourceOwnerId"`
-	DBInstanceId         string           `position:"Query" name:"DBInstanceId"`
-	StartTime            string           `position:"Query" name:"StartTime"`
-	EndTime              string           `position:"Query" name:"EndTime"`
-	DBName               string           `position:"Query" name:"DBName"`
-	SortKey              string           `position:"Query" name:"SortKey"`
-	PageSize             requests.Integer `position:"Query" name:"PageSize"`
-	PageNumber           requests.Integer `position:"Query" name:"PageNumber"`
+	ResourceOwnerAccount string           `position:"Query" name:"ResourceOwnerAccount"`
 	OwnerAccount         string           `position:"Query" name:"OwnerAccount"`
+	EndTime              string           `position:"Query" name:"EndTime"`
+	StartTime            string           `position:"Query" name:"StartTime"`
+	OwnerId              requests.Integer `position:"Query" name:"OwnerId"`
+	PageNumber           requests.Integer `position:"Query" name:"PageNumber"`
+	SortKey              string           `position:"Query" name:"SortKey"`
+	DBName               string           `position:"Query" name:"DBName"`
+	PageSize             requests.Integer `position:"Query" name:"PageSize"`
+	DBInstanceId         string           `position:"Query" name:"DBInstanceId"`
 }
 
 // DescribeSlowLogsResponse is the response struct for api DescribeSlowLogs
@@ -96,6 +96,7 @@ type DescribeSlowLogsResponse struct {
 	Engine           string                  `json:"Engine" xml:"Engine"`
 	StartTime        string                  `json:"StartTime" xml:"StartTime"`
 	EndTime          string                  `json:"EndTime" xml:"EndTime"`
+	DBInstanceId     string                  `json:"DBInstanceId" xml:"DBInstanceId"`
 	TotalRecordCount int                     `json:"TotalRecordCount" xml:"TotalRecordCount"`
 	PageNumber       int                     `json:"PageNumber" xml:"PageNumber"`
 	PageRecordCount  int                     `json:"PageRecordCount" xml:"PageRecordCount"`

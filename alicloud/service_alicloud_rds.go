@@ -586,6 +586,14 @@ func (s *RdsService) NotFoundDBInstance(err error) bool {
 	return false
 }
 
+func (s *RdsService) NotFoundDBBackup(err error) bool {
+	if IsExceptedErrors(err, []string{InvalidBackupIdNotFound}) {
+		return true
+	}
+
+	return false
+}
+
 func (s *RdsService) DescribeDBBackups(request *rds.DescribeBackupsRequest) ([]rds.Backup, error) {
 
 	var dbBackups []rds.Backup

@@ -2,10 +2,11 @@ package alicloud
 
 import (
 	"fmt"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
 	"github.com/hashicorp/terraform/helper/resource"
@@ -23,8 +24,8 @@ func resourceAlicloudDBBackup() *schema.Resource {
 		},
 
 		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(10 * time.Minute),
-			Delete: schema.DefaultTimeout(3 * time.Minute),
+			Create: schema.DefaultTimeout(30 * time.Minute),
+			Delete: schema.DefaultTimeout(30 * time.Minute),
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -83,40 +84,27 @@ func resourceAlicloudDBBackupCreate(d *schema.ResourceData, meta interface{}) er
 	if err != nil {
 		return err
 	}
+	log.Printf("[DEBUG] old backups: %#v", len(dbBackupsBeforeCreate))
 
-	_, err = client.WithRdsClient(func(rdsClient *rds.Client) (interface{}, error) {
+	raw, err := client.WithRdsClient(func(rdsClient *rds.Client) (interface{}, error) {
 		return rdsClient.CreateBackup(request)
 	})
 
 	if err != nil {
 		return fmt.Errorf("Error creating Alicloud db backup: %#v", err)
 	}
-	//resp, _ := raw.(*rds.CreateBackupResponse)
 
-	dbBackupsAfterCreate, err := rdsService.DescribeDBBackups(getRequest)
-	if err != nil {
-		return err
-	}
+	backupJobId := raw.(*rds.CreateBackupResponse).BackupJobId
 
-	newlyCreatedBackupIds := getRecentBackups(dbBackupsBeforeCreate, dbBackupsAfterCreate)
-
-	if len(newlyCreatedBackupIds) != 1 {
-		return fmt.Errorf("Error fetching created backup : %#v", err)
-	}
-
-	backupId := newlyCreatedBackupIds[0]
-
-	d.SetId(backupId + ":" + request.DBInstanceId)
-	//d.SetId(backupId)
-
-	log.Printf("[INFO] Backup ID: %s", backupId)
-
-	getRequest.BackupId = backupId
+	//Get Backup Task Status
+	describeTaskReq := rds.CreateDescribeBackupTasksRequest()
+	describeTaskReq.DBInstanceId = request.DBInstanceId
+	describeTaskReq.BackupJobId = backupJobId
 
 	stateConf := &resource.StateChangeConf{
-		Pending:    []string{"Creating"},
-		Target:     []string{"Success"},
-		Refresh:    waitForBackupSuccess(client, getRequest),
+		Pending:    []string{"NoStart", "Preparing", "Waiting", "Uploading", "Checking"},
+		Target:     []string{"Finished"},
+		Refresh:    waitForBackupFinish(client, describeTaskReq),
 		Timeout:    d.Timeout(schema.TimeoutCreate),
 		Delay:      5 * time.Second,
 		MinTimeout: 3 * time.Second,
@@ -125,13 +113,44 @@ func resourceAlicloudDBBackupCreate(d *schema.ResourceData, meta interface{}) er
 	_, stateErr := stateConf.WaitForState()
 	if stateErr != nil {
 		return fmt.Errorf(
-			"Error waiting for Backup (%s) to become Success: %s",
-			backupId, stateErr)
+			"Error waiting for Backup task to finish: %s", stateErr)
 	}
-	/*// wait instance status change from Creating to running
-	if err := rdsService.WaitForDBInstance(d.Id(), Running, DefaultLongTimeout); err != nil {
-		return fmt.Errorf("WaitForInstance %s got error: %#v", Running, err)
-	}*/
+
+	var dbBackupsAfterCreate []rds.Backup
+
+	//as it takes sometime for backup to appear in describe after finished
+	for {
+		dbBackupsAfterCreate, err = rdsService.DescribeDBBackups(getRequest)
+		if err != nil {
+			return err
+		}
+
+		if len(dbBackupsAfterCreate) > len(dbBackupsBeforeCreate) {
+			break
+		}
+	}
+
+	log.Printf("[DEBUG] new backups: %#v", len(dbBackupsAfterCreate))
+
+	newlyCreatedBackups := getRecentBackups(dbBackupsBeforeCreate, dbBackupsAfterCreate)
+
+	log.Printf("[DEBUG] recent backups: %#v", newlyCreatedBackups)
+
+	if len(newlyCreatedBackups) != 1 {
+		return fmt.Errorf("Error retreiving newly created backup")
+	}
+
+	backup := newlyCreatedBackups[0]
+
+	d.SetId(backup.BackupId + COLON_SEPARATED + request.DBInstanceId)
+	//d.SetId(backupId)
+
+	log.Printf("[INFO] Created Backup : %#v", backup)
+
+	if backup.BackupStatus != "Success" {
+		return fmt.Errorf(
+			"Error in Created Backup Status : %s", backup.BackupStatus)
+	}
 
 	return resourceAlicloudDBBackupRead(d, meta)
 }
@@ -145,7 +164,7 @@ func resourceAlicloudDBBackupRead(d *schema.ResourceData, meta interface{}) erro
 
 	getRequest := rds.CreateDescribeBackupsRequest()
 	getRequest.DBInstanceId = instanceId
-	getRequest.BackupId = backupId
+	//getRequest.BackupId = backupId
 	getRequest.PageSize = requests.NewInteger(PageSizeLarge)
 	dbBackups, err := rdsService.DescribeDBBackups(getRequest)
 
@@ -157,7 +176,12 @@ func resourceAlicloudDBBackupRead(d *schema.ResourceData, meta interface{}) erro
 		return fmt.Errorf("Error Describe DB Instance Backup: %#v", err)
 	}
 
-	dbBackup := dbBackups[0]
+	dbBackup, err := getBackupFromList(dbBackups, backupId)
+
+	if err != nil {
+		d.SetId("")
+		return nil
+	}
 
 	d.Set("backup_method", dbBackup.BackupMethod)
 	d.Set("backup_type", dbBackup.BackupType)
@@ -170,121 +194,103 @@ func resourceAlicloudDBBackupDelete(d *schema.ResourceData, meta interface{}) er
 	client := meta.(*connectivity.AliyunClient)
 	rdsService := RdsService{client}
 
-	instance, err := rdsService.DescribeDBInstanceById(d.Id())
+	backupId, instanceId, _ := getBackupIdAndInstanceId(d, meta)
+
+	getRequest := rds.CreateDescribeBackupsRequest()
+	getRequest.DBInstanceId = instanceId
+	//getRequest.BackupId = backupId
+	getRequest.PageSize = requests.NewInteger(PageSizeLarge)
+	dbBackups, err := rdsService.DescribeDBBackups(getRequest)
+
 	if err != nil {
+		//check if instance is not in existence
 		if rdsService.NotFoundDBInstance(err) {
 			return nil
 		}
 		return fmt.Errorf("Error Describe DB Instance Backup: %#v", err)
 	}
-	if PayType(instance.PayType) == Prepaid {
-		return fmt.Errorf("At present, 'Prepaid' instance cannot be deleted and must wait it to be expired and release it automatically.")
+
+	dbBackup, err := getBackupFromList(dbBackups, backupId)
+
+	//check if backup is not in existence
+	if err != nil {
+		return nil
 	}
 
-	request := rds.CreateDeleteDBInstanceRequest()
-	request.DBInstanceId = d.Id()
+	request := rds.CreateDeleteBackupRequest()
+	request.DBInstanceId = instanceId
+	request.BackupId = dbBackup.BackupId
 
 	return resource.Retry(5*time.Minute, func() *resource.RetryError {
 		_, err := client.WithRdsClient(func(rdsClient *rds.Client) (interface{}, error) {
-			return rdsClient.DeleteDBInstance(request)
+			return rdsClient.DeleteBackup(request)
 		})
 
 		if err != nil {
+			if rdsService.NotFoundDBBackup(err) {
+				return nil
+			}
+			return resource.RetryableError(fmt.Errorf("Delete DB instance backup timeout and got an error: %#v.", err))
+		}
+		dbBackups, err := rdsService.DescribeDBBackups(getRequest)
+
+		if err != nil {
+			//check if instance is not in existence
 			if rdsService.NotFoundDBInstance(err) {
 				return nil
 			}
-			return resource.RetryableError(fmt.Errorf("Delete DB instance timeout and got an error: %#v.", err))
+			return resource.NonRetryableError(fmt.Errorf("Error Describe DB Instance Backup: %#v", err))
 		}
 
-		instance, err := rdsService.DescribeDBInstanceById(d.Id())
+		_, err = getBackupFromList(dbBackups, backupId)
+
+		//check if backup is not in existence
 		if err != nil {
-			if NotFoundError(err) {
-				return nil
-			}
-			return resource.NonRetryableError(fmt.Errorf("Error Describe DB InstanceAttribute: %#v", err))
-		}
-		if instance == nil {
 			return nil
 		}
 
-		return resource.RetryableError(fmt.Errorf("Delete DB instance timeout and got an error: %#v.", err))
+		return resource.RetryableError(fmt.Errorf("Delete DB instance backup timeout and got an error: %#v.", err))
 	})
 }
 
-func waitForBackupSuccess(client *connectivity.AliyunClient, request *rds.DescribeBackupsRequest) resource.StateRefreshFunc {
+func waitForBackupFinish(client *connectivity.AliyunClient, request *rds.DescribeBackupTasksRequest) resource.StateRefreshFunc {
 	return func() (interface{}, string, error) {
 
-		rdsService := RdsService{client}
-		backups, err := rdsService.DescribeDBBackups(request)
+		raw, err := client.WithRdsClient(func(rdsClient *rds.Client) (interface{}, error) {
+			return rdsClient.DescribeBackupTasks(request)
+		})
 		if err != nil {
 			return nil, "", err
 		}
 
-		if len(backups) < 1 {
-			return nil, "", fmt.Errorf("Not able to retrieve backup %s for status check", request.BackupId)
-		}
-
-		backup := backups[0]
-
-		if backup.BackupStatus == "Failed" {
-			return nil, "", fmt.Errorf("Backup Status: '%s'", backup.BackupStatus)
-
-		}
-
-		if backup.BackupStatus != "Success" {
-			return backup, "Creating", nil
-		}
-
-		return backup, backup.BackupStatus, nil
+		backupJob := raw.(*rds.DescribeBackupTasksResponse).Items.BackupJob[0]
+		log.Printf("Backup Job Status: %s", backupJob.BackupStatus)
+		return backupJob, backupJob.BackupStatus, nil
 	}
 }
 
-/*func describeDBBackups(client *connectivity.AliyunClient, request *rds.DescribeBackupsRequest) ([]rds.Backup, error){
+func getBackupFromList(backupList []rds.Backup, backupId string) (rds.Backup, error) {
+	empty := rds.Backup{}
 
-
-	var dbBackups []rds.Backup
-
-	for {
-		raw, err := client.WithRdsClient(func(rdsClient *rds.Client) (interface{}, error) {
-			return rdsClient.DescribeBackups(request)
-		})
-		if err != nil {
-			return nil, fmt.Errorf("Error describing Alicloud db backups: %#v", err)
-		}
-		resp, _ := raw.(*rds.DescribeBackupsResponse)
-		if resp == nil || len(resp.Items.Backup) < 1 {
-			break
-		}
-
-		for _, item := range resp.Items.Backup {
-
-			dbBackups = append(dbBackups, item)
-		}
-
-		if len(resp.Items.Backup) < PageSizeLarge {
-			break
-		}
-
-		if page, err := getNextpageNumber(request.PageNumber); err != nil {
-			return nil, err
-		} else {
-			request.PageNumber = page
+	for _, backup := range backupList {
+		if backupId == backup.BackupId {
+			return backup, nil
 		}
 	}
 
-	return dbBackups, nil
-}*/
+	return empty, fmt.Errorf("DB Instance Backup %s not found", backupId)
+}
 
-func getRecentBackups(oldBackups []rds.Backup, newBackups []rds.Backup) []string {
+func getRecentBackups(oldBackups []rds.Backup, newBackups []rds.Backup) []rds.Backup {
 	oldBackupIdSet := make(map[string]struct{})
-	var recentBackups []string
+	var recentBackups []rds.Backup
 	for _, backup := range oldBackups {
 		oldBackupIdSet[backup.BackupId] = struct{}{}
 	}
 
 	for _, backup := range newBackups {
 		if _, ok := oldBackupIdSet[backup.BackupId]; !ok {
-			recentBackups = append(recentBackups, backup.BackupId)
+			recentBackups = append(recentBackups, backup)
 		}
 	}
 
@@ -297,7 +303,7 @@ func getBackupIdAndInstanceId(d *schema.ResourceData, meta interface{}) (string,
 }
 
 func splitBackupIdAndInstanceId(s string) (string, string, error) {
-	parts := strings.Split(s, ":")
+	parts := strings.Split(s, COLON_SEPARATED)
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("invalid resource id")
 	}

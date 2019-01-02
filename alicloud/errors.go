@@ -7,9 +7,9 @@ import (
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
 	"github.com/aliyun/aliyun-datahub-sdk-go/datahub"
-	"github.com/aliyun/aliyun-log-go-sdk"
+	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/aliyun/fc-go-sdk"
+	fc "github.com/aliyun/fc-go-sdk"
 	"github.com/denverdino/aliyungo/common"
 )
 
@@ -115,6 +115,7 @@ const (
 	InvalidDBInstanceIdNotFound            = "InvalidDBInstanceId.NotFound"
 	InvalidDBNameNotFound                  = "InvalidDBName.NotFound"
 	InvalidDBInstanceNameNotFound          = "InvalidDBInstanceName.NotFound"
+	InvalidBackupIdNotFound                = "InvalidBackupId.NotFound"
 	InvalidCurrentConnectionStringNotFound = "InvalidCurrentConnectionString.NotFound"
 	NetTypeExists                          = "NetTypeExists"
 	InvalidAccountNameDuplicate            = "InvalidAccountName.Duplicate"

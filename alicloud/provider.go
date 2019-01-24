@@ -112,6 +112,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_fc_services":              dataSourceAlicloudFcServices(),
 			"alicloud_fc_triggers":              dataSourceAlicloudFcTriggers(),
 			"alicloud_db_instances":             dataSourceAlicloudDBInstances(),
+			"alicloud_db_backups":               dataSourceAlicloudDBBackups(),
 			"alicloud_pvtz_zones":               dataSourceAlicloudPvtzZones(),
 			"alicloud_pvtz_zone_records":        dataSourceAlicloudPvtzZoneRecords(),
 			"alicloud_router_interfaces":        dataSourceAlicloudRouterInterfaces(),

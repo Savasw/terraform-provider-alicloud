@@ -15,7 +15,7 @@ func dataSourceAlicloudInstanceTypes() *schema.Resource {
 		Read: dataSourceAlicloudInstanceTypesRead,
 
 		Schema: map[string]*schema.Schema{
-			"availability_zone": &schema.Schema{
+			"availability_zone": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
@@ -49,25 +49,30 @@ func dataSourceAlicloudInstanceTypes() *schema.Resource {
 				ForceNew:     true,
 				ValidateFunc: validateAllowedStringValue([]string{string(Vpc), string(Classic)}),
 			},
-			"spot_strategy": &schema.Schema{
+			"spot_strategy": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
 				Default:      NoSpot,
 				ValidateFunc: validateInstanceSpotStrategy,
 			},
-			"eni_amount": &schema.Schema{
+			"eni_amount": {
 				Type:     schema.TypeInt,
 				Optional: true,
 				ForceNew: true,
 			},
-			"is_outdated": &schema.Schema{
+			"is_outdated": {
 				Type:     schema.TypeBool,
 				Optional: true,
 			},
 			"output_file": {
 				Type:     schema.TypeString,
 				Optional: true,
+			},
+			"ids": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
 			// Computed values.
 			"instance_types": {
@@ -96,7 +101,7 @@ func dataSourceAlicloudInstanceTypes() *schema.Resource {
 							Computed: true,
 							Elem:     &schema.Schema{Type: schema.TypeString},
 						},
-						"gpu": &schema.Schema{
+						"gpu": {
 							Type:     schema.TypeMap,
 							Computed: true,
 							Elem: &schema.Resource{
@@ -112,7 +117,7 @@ func dataSourceAlicloudInstanceTypes() *schema.Resource {
 								},
 							},
 						},
-						"burstable_instance": &schema.Schema{
+						"burstable_instance": {
 							Type:     schema.TypeMap,
 							Computed: true,
 							Elem: &schema.Resource{
@@ -132,7 +137,7 @@ func dataSourceAlicloudInstanceTypes() *schema.Resource {
 							Type:     schema.TypeInt,
 							Computed: true,
 						},
-						"local_storage": &schema.Schema{
+						"local_storage": {
 							Type:     schema.TypeMap,
 							Computed: true,
 							Elem: &schema.Resource{
@@ -265,6 +270,9 @@ func instanceTypesDescriptionAttributes(d *schema.ResourceData, types []ecs.Inst
 
 	d.SetId(dataResourceIdHash(ids))
 	if err := d.Set("instance_types", s); err != nil {
+		return err
+	}
+	if err := d.Set("ids", ids); err != nil {
 		return err
 	}
 

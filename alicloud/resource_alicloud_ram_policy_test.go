@@ -21,6 +21,11 @@ func init() {
 	resource.AddTestSweepers("alicloud_ram_policy", &resource.Sweeper{
 		Name: "alicloud_ram_policy",
 		F:    testSweepRamPolicies,
+		Dependencies: []string{
+			"alicloud_ram_user",
+			"alicloud_ram_role",
+			"alicloud_ram_group",
+		},
 	})
 }
 
@@ -100,7 +105,7 @@ func TestAccAlicloudRamPolicy_basic(t *testing.T) {
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckRamPolicyDestroy,
 		Steps: []resource.TestStep{
-			resource.TestStep{
+			{
 				Config: testAccRamPolicyConfig(acctest.RandIntRange(1000000, 99999999)),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckRamPolicyExists(

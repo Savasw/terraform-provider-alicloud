@@ -2,23 +2,10 @@ package connectivity
 
 import (
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
-
-	"net/url"
-
-	"regexp"
-
-	"sync"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/endpoints"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/resource"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/utils"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/cbn"
@@ -49,6 +36,16 @@ import (
 	"github.com/denverdino/aliyungo/ram"
 	"github.com/dxh031/ali_mns"
 	"github.com/hashicorp/terraform/terraform"
+
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 // AliyunClient of aliyun
@@ -134,7 +131,10 @@ func (client *AliyunClient) WithEcsClient(do func(*ecs.Client) (interface{}, err
 
 	// Initialize the ECS client if necessary
 	if client.ecsconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, ECSCode)
+		endpoint := client.config.EcsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, ECSCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(ECSCode), endpoint)
 		}
@@ -158,7 +158,10 @@ func (client *AliyunClient) WithRdsClient(do func(*rds.Client) (interface{}, err
 
 	// Initialize the RDS client if necessary
 	if client.rdsconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, RDSCode)
+		endpoint := client.config.RdsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, RDSCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(RDSCode), endpoint)
 		}
@@ -179,7 +182,10 @@ func (client *AliyunClient) WithSlbClient(do func(*slb.Client) (interface{}, err
 
 	// Initialize the SLB client if necessary
 	if client.slbconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, SLBCode)
+		endpoint := client.config.SlbEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, SLBCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(SLBCode), endpoint)
 		}
@@ -200,7 +206,10 @@ func (client *AliyunClient) WithVpcClient(do func(*vpc.Client) (interface{}, err
 
 	// Initialize the VPC client if necessary
 	if client.vpcconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, VPCCode)
+		endpoint := client.config.VpcEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, VPCCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(VPCCode), endpoint)
 		}
@@ -221,7 +230,10 @@ func (client *AliyunClient) WithCenClient(do func(*cbn.Client) (interface{}, err
 
 	// Initialize the CEN client if necessary
 	if client.cenconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, CENCode)
+		endpoint := client.config.CenEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, CENCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(CENCode), endpoint)
 		}
@@ -242,7 +254,10 @@ func (client *AliyunClient) WithEssClient(do func(*ess.Client) (interface{}, err
 
 	// Initialize the ESS client if necessary
 	if client.essconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, ESSCode)
+		endpoint := client.config.EssEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, ESSCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(ESSCode), endpoint)
 		}
@@ -263,18 +278,31 @@ func (client *AliyunClient) WithOssClient(do func(*oss.Client) (interface{}, err
 
 	// Initialize the OSS client if necessary
 	if client.ossconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, OSSCode)
+		schma := "https"
+		endpoint := client.config.OssEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, OSSCode)
+		}
 		if endpoint == "" {
 			endpointItem, _ := client.describeEndpointForService(strings.ToLower(string(OSSCode)))
 			if endpointItem != nil && len(endpointItem.Endpoint) > 0 {
-				schma := "http"
 				if len(endpointItem.Protocols.Protocols) > 0 {
-					schma = endpointItem.Protocols.Protocols[0]
+					// HTTP or HTTPS
+					schma = strings.ToLower(endpointItem.Protocols.Protocols[0])
+					for _, p := range endpointItem.Protocols.Protocols {
+						if strings.ToLower(p) == "https" {
+							schma = strings.ToLower(p)
+							break
+						}
+					}
 				}
-				endpoint = strings.ToLower(schma) + "://" + endpointItem.Endpoint
+				endpoint = endpointItem.Endpoint
 			} else {
-				endpoint = fmt.Sprintf("http://oss-%s.aliyuncs.com", client.RegionId)
+				endpoint = fmt.Sprintf("oss-%s.aliyuncs.com", client.RegionId)
 			}
+		}
+		if !strings.HasPrefix(endpoint, "http") {
+			endpoint = fmt.Sprintf("%s://%s", schma, endpoint)
 		}
 
 		log.Printf("[DEBUG] Instantiate OSS client using endpoint: %#v", endpoint)
@@ -316,6 +344,17 @@ func (client *AliyunClient) WithDnsClient(do func(*dns.Client) (interface{}, err
 		dnsconn.SetBusinessInfo(businessInfoKey)
 		dnsconn.SetUserAgent(client.getUserAgent())
 		dnsconn.SetSecurityToken(client.config.SecurityToken)
+		endpoint := client.config.DnsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, DNSCode)
+		}
+		if endpoint == "" {
+			endpoint = "alidns.aliyuncs.com"
+		}
+		if !strings.HasPrefix(endpoint, "http") {
+			endpoint = fmt.Sprintf("https://%s", strings.TrimPrefix(endpoint, "://"))
+		}
+		dnsconn.SetEndpoint(endpoint)
 
 		client.dnsconn = dnsconn
 	}
@@ -329,12 +368,15 @@ func (client *AliyunClient) WithRamClient(do func(ram.RamClientInterface) (inter
 
 	// Initialize the RAM client if necessary
 	if client.ramconn == nil {
-		endpoint := strings.TrimSpace(loadEndpoint(client.config.RegionId, RAMCode))
+		endpoint := client.config.RamEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, RAMCode)
+		}
 		if endpoint == "" {
 			endpoint = ram.RAMDefaultEndpoint
 		}
 		if !strings.HasPrefix(endpoint, "http") {
-			endpoint = fmt.Sprintf("https://%s", endpoint)
+			endpoint = fmt.Sprintf("https://%s", strings.TrimPrefix(endpoint, "://"))
 		}
 		ramconn := ram.NewClientWithEndpointAndSecurityToken(endpoint, client.config.AccessKey, client.config.SecretKey, client.config.SecurityToken)
 		client.ramconn = ramconn
@@ -351,6 +393,16 @@ func (client *AliyunClient) WithCsClient(do func(*cs.Client) (interface{}, error
 	if client.csconn == nil {
 		csconn := cs.NewClientForAussumeRole(client.config.AccessKey, client.config.SecretKey, client.config.SecurityToken)
 		csconn.SetUserAgent(client.getUserAgent())
+		endpoint := client.config.CsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, CONTAINCode)
+		}
+		if endpoint != "" {
+			if !strings.HasPrefix(endpoint, "http") {
+				endpoint = fmt.Sprintf("https://%s", strings.TrimPrefix(endpoint, "://"))
+			}
+			csconn.SetEndpoint(endpoint)
+		}
 		client.csconn = csconn
 	}
 
@@ -367,6 +419,13 @@ func (client *AliyunClient) WithCdnClient(do func(*cdn.CdnClient) (interface{}, 
 		cdnconn.SetBusinessInfo(businessInfoKey)
 		cdnconn.SetUserAgent(client.getUserAgent())
 		cdnconn.SetSecurityToken(client.config.SecurityToken)
+		endpoint := client.config.CdnEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, CDNCode)
+		}
+		if endpoint != "" && !strings.HasPrefix(endpoint, "http") {
+			cdnconn.SetEndpoint(fmt.Sprintf("https://%s", strings.TrimPrefix(endpoint, "://")))
+		}
 		client.cdnconn = cdnconn
 	}
 
@@ -382,6 +441,13 @@ func (client *AliyunClient) WithKmsClient(do func(*kms.Client) (interface{}, err
 		kmsconn := kms.NewECSClientWithSecurityToken(client.config.AccessKey, client.config.SecretKey, client.config.SecurityToken, common.Region(client.config.RegionId))
 		kmsconn.SetBusinessInfo(businessInfoKey)
 		kmsconn.SetUserAgent(client.getUserAgent())
+		endpoint := client.config.KmsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, KMSCode)
+		}
+		if endpoint != "" && !strings.HasPrefix(endpoint, "http") {
+			kmsconn.SetEndpoint(fmt.Sprintf("https://%s", strings.TrimPrefix(endpoint, "://")))
+		}
 		client.kmsconn = kmsconn
 	}
 
@@ -394,7 +460,10 @@ func (client *AliyunClient) WithOtsClient(do func(*ots.Client) (interface{}, err
 
 	// Initialize the OTS client if necessary
 	if client.otsconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, OTSCode)
+		endpoint := client.config.OtsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, OTSCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(OTSCode), endpoint)
 		}
@@ -432,7 +501,10 @@ func (client *AliyunClient) WithPvtzClient(do func(*pvtz.Client) (interface{}, e
 
 	// Initialize the PVTZ client if necessary
 	if client.pvtzconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, PVTZCode)
+		endpoint := client.config.PvtzEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, PVTZCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(PVTZCode), endpoint)
 		} else {
@@ -455,7 +527,10 @@ func (client *AliyunClient) WithStsClient(do func(*sts.Client) (interface{}, err
 
 	// Initialize the STS client if necessary
 	if client.stsconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, STSCode)
+		endpoint := client.config.StsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, STSCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(STSCode), endpoint)
 		}
@@ -483,7 +558,9 @@ func (client *AliyunClient) WithLogClient(do func(*sls.Client) (interface{}, err
 				endpoint = fmt.Sprintf("%s.log.aliyuncs.com", client.config.RegionId)
 			}
 		}
-
+		if !strings.HasPrefix(endpoint, "http") {
+			endpoint = fmt.Sprintf("https://%s", strings.TrimPrefix(endpoint, "://"))
+		}
 		client.logconn = &sls.Client{
 			AccessKeyID:     client.config.AccessKey,
 			AccessKeySecret: client.config.SecretKey,
@@ -502,7 +579,7 @@ func (client *AliyunClient) WithDrdsClient(do func(*drds.Client) (interface{}, e
 
 	// Initialize the DRDS client if necessary
 	if client.drdsconn == nil {
-		endpoint := client.config.DRDSEndpoint
+		endpoint := client.config.DrdsEndpoint
 		if endpoint == "" {
 			endpoint = loadEndpoint(client.config.RegionId, DRDSCode)
 			if endpoint == "" {
@@ -528,7 +605,10 @@ func (client *AliyunClient) WithDdsClient(do func(*dds.Client) (interface{}, err
 
 	// Initialize the DDS client if necessary
 	if client.ddsconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, DDSCode)
+		endpoint := client.config.DdsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, DDSCode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, string(DDSCode), endpoint)
 		}
@@ -549,7 +629,10 @@ func (client *AliyunClient) WithRkvClient(do func(*r_kvstore.Client) (interface{
 
 	// Initialize the RKV client if necessary
 	if client.rkvconn == nil {
-		endpoint := loadEndpoint(client.config.RegionId, KVSTORECode)
+		endpoint := client.config.KVStoreEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.config.RegionId, KVSTORECode)
+		}
 		if endpoint != "" {
 			endpoints.AddEndpointMapping(client.config.RegionId, fmt.Sprintf("R-%s", string(KVSTORECode)), endpoint)
 		}
@@ -570,14 +653,16 @@ func (client *AliyunClient) WithFcClient(do func(*fc.Client) (interface{}, error
 
 	// Initialize the FC client if necessary
 	if client.fcconn == nil {
-		endpoint := client.config.LogEndpoint
+		endpoint := client.config.FcEndpoint
 		if endpoint == "" {
 			endpoint = loadEndpoint(client.config.RegionId, FCCode)
 			if endpoint == "" {
 				endpoint = fmt.Sprintf("%s.fc.aliyuncs.com", client.config.RegionId)
 			}
 		}
-
+		if strings.HasPrefix(endpoint, "http") {
+			endpoint = strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://")
+		}
 		accountId, err := client.AccountId()
 		if err != nil {
 			return nil, err
@@ -585,7 +670,7 @@ func (client *AliyunClient) WithFcClient(do func(*fc.Client) (interface{}, error
 
 		config := client.getSdkConfig()
 		fcconn, err := fc.NewClient(
-			fmt.Sprintf("%s.%s", accountId, endpoint),
+			fmt.Sprintf("https://%s.%s", accountId, endpoint),
 			string(ApiVersion20160815),
 			client.config.AccessKey,
 			client.config.SecretKey,
@@ -611,9 +696,12 @@ func (client *AliyunClient) WithCloudApiClient(do func(*cloudapi.Client) (interf
 
 	// Initialize the Cloud API client if necessary
 	if client.cloudapiconn == nil {
-		endpoint := loadEndpoint(client.RegionId, CLOUDAPICode)
+		endpoint := client.config.ApigatewayEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.RegionId, CLOUDAPICode)
+		}
 		if endpoint != "" {
-			endpoints.AddEndpointMapping(client.RegionId, fmt.Sprintf("R-%s", string(CLOUDAPICode)), endpoint)
+			endpoints.AddEndpointMapping(client.RegionId, "CLOUDAPI", endpoint)
 		}
 		cloudapiconn, err := cloudapi.NewClientWithOptions(client.RegionId, client.getSdkConfig(), client.config.getAuthCredential(true))
 		if err != nil {
@@ -632,13 +720,19 @@ func (client *AliyunClient) WithDataHubClient(do func(*datahub.DataHub) (interfa
 
 	// Initialize the DataHub client if necessary
 	if client.dhconn == nil {
-		endpoint := loadEndpoint(client.RegionId, DATAHUBCode)
+		endpoint := client.config.DatahubEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.RegionId, DATAHUBCode)
+		}
 		if endpoint == "" {
 			if client.RegionId == string(APSouthEast1) {
-				endpoint = "https://dh-singapore.aliyuncs.com"
+				endpoint = "dh-singapore.aliyuncs.com"
 			} else {
-				endpoint = fmt.Sprintf("https://dh-%s.aliyuncs.com", client.RegionId)
+				endpoint = fmt.Sprintf("dh-%s.aliyuncs.com", client.RegionId)
 			}
+		}
+		if !strings.HasPrefix(endpoint, "http") {
+			endpoint = fmt.Sprintf("https://%s", endpoint)
 		}
 		account := datahub.NewStsCredential(client.AccessKey, client.SecretKey, client.SecurityToken)
 		config := &datahub.Config{
@@ -657,7 +751,7 @@ func (client *AliyunClient) WithMnsClient(do func(*ali_mns.MNSClient) (interface
 
 	// Initialize the MNS client if necessary
 	if client.mnsconn == nil {
-		endpoint := client.config.MNSEndpoint
+		endpoint := client.config.MnsEndpoint
 		if endpoint == "" {
 			endpoint = loadEndpoint(client.config.RegionId, MNSCode)
 			if endpoint == "" {
@@ -669,7 +763,10 @@ func (client *AliyunClient) WithMnsClient(do func(*ali_mns.MNSClient) (interface
 		if err != nil {
 			return nil, err
 		}
-		mnsUrl := fmt.Sprintf("http://%s.mns.%s", accountId, endpoint)
+		if strings.HasPrefix(endpoint, "http") {
+			endpoint = strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://")
+		}
+		mnsUrl := fmt.Sprintf("https://%s.mns.%s", accountId, endpoint)
 
 		mnsClient := ali_mns.NewAliMNSClient(mnsUrl, client.config.AccessKey, client.config.SecretKey)
 
@@ -707,12 +804,15 @@ func (client *AliyunClient) WithTableStoreClient(instanceName string, do func(*t
 	// Initialize the TABLESTORE client if necessary
 	tableStoreClient, ok := client.tablestoreconnByInstanceName[instanceName]
 	if !ok {
-		endpoint := loadEndpoint(client.RegionId, OTSCode)
+		endpoint := client.config.OtsEndpoint
+		if endpoint == "" {
+			endpoint = loadEndpoint(client.RegionId, OTSCode)
+		}
 		if endpoint == "" {
 			endpoint = fmt.Sprintf("%s.%s.ots.aliyuncs.com", instanceName, client.RegionId)
 		}
 		if !strings.HasPrefix(endpoint, "https") && !strings.HasPrefix(endpoint, "http") {
-			endpoint = "https://" + endpoint
+			endpoint = fmt.Sprintf("https://%s", endpoint)
 		}
 		tableStoreClient = tablestore.NewClientWithConfig(endpoint, instanceName, client.AccessKey, client.SecretKey, client.SecurityToken, tablestore.NewDefaultTableStoreConfig())
 		client.tablestoreconnByInstanceName[instanceName] = tableStoreClient
@@ -742,7 +842,7 @@ func (client *AliyunClient) WithCsProjectClient(clusterId, endpoint string, clus
 	return do(csProjectClient)
 }
 
-func (client *AliyunClient) NewCommonRequest(product, serviceCode string, apiVersion ApiVersion) *requests.CommonRequest {
+func (client *AliyunClient) NewCommonRequest(product, serviceCode, schema string, apiVersion ApiVersion) *requests.CommonRequest {
 	request := requests.NewCommonRequest()
 	endpoint := loadEndpoint(client.RegionId, ServiceCode(strings.ToUpper(product)))
 	if endpoint == "" {
@@ -764,6 +864,7 @@ func (client *AliyunClient) NewCommonRequest(product, serviceCode string, apiVer
 	request.Version = string(apiVersion)
 	request.RegionId = client.RegionId
 	request.Product = product
+	request.Scheme = schema
 	return request
 }
 
@@ -797,7 +898,8 @@ func (client *AliyunClient) getSdkConfig() *sdk.Config {
 		WithUserAgent(client.getUserAgent()).
 		WithGoRoutinePoolSize(10).
 		WithDebug(false).
-		WithHttpTransport(client.getTransport())
+		WithHttpTransport(client.getTransport()).
+		WithScheme("HTTPS")
 }
 
 func (client *AliyunClient) getUserAgent() string {
@@ -825,7 +927,7 @@ func (client *AliyunClient) getHttpProxyUrl() *url.URL {
 		value := strings.Trim(os.Getenv(v), " ")
 		if value != "" {
 			if !regexp.MustCompile(`^http(s)?://`).MatchString(value) {
-				value = fmt.Sprintf("http://%s", value)
+				value = fmt.Sprintf("https://%s", value)
 			}
 			proxyUrl, err := url.Parse(value)
 			if err == nil {
@@ -841,7 +943,10 @@ func (client *AliyunClient) describeEndpointForService(serviceCode string) (*loc
 	args := location.CreateDescribeEndpointRequest()
 	args.ServiceCode = serviceCode
 	args.Id = client.config.RegionId
-	args.Domain = loadEndpoint(client.RegionId, LOCATIONCode)
+	args.Domain = client.config.LocationEndpoint
+	if args.Domain == "" {
+		args.Domain = loadEndpoint(client.RegionId, LOCATIONCode)
+	}
 	if args.Domain == "" {
 		args.Domain = "location-readonly.aliyuncs.com"
 	}
@@ -860,9 +965,11 @@ func (client *AliyunClient) describeEndpointForService(serviceCode string) (*loc
 
 func (client *AliyunClient) getCallerIdentity() (*sts.GetCallerIdentityResponse, error) {
 	args := sts.CreateGetCallerIdentityRequest()
-	args.Scheme = "https"
 
-	endpoint := loadEndpoint(client.config.RegionId, STSCode)
+	endpoint := client.config.StsEndpoint
+	if endpoint == "" {
+		endpoint = loadEndpoint(client.config.RegionId, STSCode)
+	}
 	if endpoint != "" {
 		endpoints.AddEndpointMapping(client.config.RegionId, string(STSCode), endpoint)
 	}

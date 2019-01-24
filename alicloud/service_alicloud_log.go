@@ -2,6 +2,7 @@ package alicloud
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aliyun/aliyun-log-go-sdk"
@@ -117,4 +118,60 @@ func (s *LogService) DescribeLogMachineGroup(projectName, groupName string) (gro
 		return group, GetNotFoundErrorFromString(GetNotFoundMessage("Log Machine Group", groupName))
 	}
 	return
+}
+
+func (s *LogService) DescribeLogLogtailConfig(projectName, configName string) (logconfig *sls.LogConfig, err error) {
+	err = resource.Retry(2*time.Minute, func() *resource.RetryError {
+		raw, err := s.client.WithLogClient(func(slsClient *sls.Client) (interface{}, error) {
+			return slsClient.GetConfig(projectName, configName)
+		})
+		if err != nil {
+			if IsExceptedErrors(err, []string{ProjectNotExist, LogStoreNotExist, LogConfigNotExist}) {
+				return resource.NonRetryableError(WrapErrorf(err, NotFoundMsg, AliyunLogGoSdkERROR))
+			}
+			if IsExceptedErrors(err, []string{InternalServerError}) {
+				return resource.RetryableError(WrapErrorf(err, DefaultErrorMsg, configName, "GetConfig", AliyunLogGoSdkERROR))
+			}
+			return resource.NonRetryableError(WrapErrorf(err, DefaultErrorMsg, configName, "GetConfig", AliyunLogGoSdkERROR))
+		}
+		logconfig, _ = raw.(*sls.LogConfig)
+		return nil
+	})
+	if err != nil {
+		return
+	}
+	if logconfig == nil || logconfig.Name == "" {
+		return logconfig, WrapErrorf(Error(GetNotFoundMessage("Log LogTail Config", configName)), NotFoundMsg, ProviderERROR)
+	}
+	return
+}
+
+func (s *LogService) DescribeLogtailAttachment(id string) (groupNames []string, err error) {
+	split := strings.Split(id, COLON_SEPARATED)
+	projectName, configName := split[0], split[1]
+	err = resource.Retry(2*time.Minute, func() *resource.RetryError {
+
+		group_names, err := s.client.WithLogClient(func(slsClient *sls.Client) (interface{}, error) {
+			return slsClient.GetAppliedMachineGroups(projectName, configName)
+		})
+		if err != nil {
+			if IsExceptedErrors(err, []string{ProjectNotExist, LogConfigNotExist, MachineGroupNotExist}) {
+				return resource.NonRetryableError(WrapErrorf(err, NotFoundMsg, AliyunLogGoSdkERROR))
+			}
+			if IsExceptedErrors(err, []string{InternalServerError}) {
+				return resource.RetryableError(WrapErrorf(err, DefaultErrorMsg, id, "GetAppliedMachineGroups", AliyunLogGoSdkERROR))
+			}
+			return resource.NonRetryableError(WrapErrorf(err, DefaultErrorMsg, id, "GetAppliedMachineGroups", AliyunLogGoSdkERROR))
+		}
+
+		groupNames, _ = group_names.([]string)
+		return nil
+	})
+	if err != nil {
+		return
+	}
+	if len(groupNames) == 0 {
+		return groupNames, WrapErrorf(Error(GetNotFoundMessage("Logtail Attachment", id)), NotFoundMsg, ProviderERROR)
+	}
+	return groupNames, nil
 }

@@ -49,7 +49,7 @@ func dataSourceAlicloudZones() *schema.Resource {
 				ValidateFunc: validateDiskCategory,
 			},
 
-			"multi": &schema.Schema{
+			"multi": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
@@ -67,7 +67,7 @@ func dataSourceAlicloudZones() *schema.Resource {
 				ForceNew:     true,
 				ValidateFunc: validateAllowedStringValue([]string{string(Vpc), string(Classic)}),
 			},
-			"spot_strategy": &schema.Schema{
+			"spot_strategy": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
@@ -78,6 +78,11 @@ func dataSourceAlicloudZones() *schema.Resource {
 			"output_file": {
 				Type:     schema.TypeString,
 				Optional: true,
+			},
+			"ids": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
 			},
 			// Computed values.
 			"zones": {
@@ -104,6 +109,11 @@ func dataSourceAlicloudZones() *schema.Resource {
 							Elem:     &schema.Schema{Type: schema.TypeString},
 						},
 						"available_disk_categories": {
+							Type:     schema.TypeList,
+							Computed: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+						},
+						"multi_zone_ids": {
 							Type:     schema.TypeList,
 							Computed: true,
 							Elem:     &schema.Schema{Type: schema.TypeString},
@@ -264,6 +274,10 @@ func dataSourceAlicloudZonesRead(d *schema.ResourceData, meta interface{}) error
 		return err
 	}
 
+	if err := d.Set("ids", zoneIds); err != nil {
+		return err
+	}
+
 	// create a json file in current directory and write data source to it.
 	if output, ok := d.GetOk("output_file"); ok && output.(string) != "" {
 		writeToFile(output.(string), s)
@@ -286,11 +300,14 @@ func constraints(arr interface{}, v string) bool {
 
 func zoneIdsDescriptionAttributes(d *schema.ResourceData, zones []string) error {
 	var s []map[string]interface{}
+	var zoneIds []string
 	for _, t := range zones {
 		mapping := map[string]interface{}{
-			"id": t,
+			"id":             t,
+			"multi_zone_ids": splitMultiZoneId(t),
 		}
 		s = append(s, mapping)
+		zoneIds = append(zoneIds, t)
 	}
 
 	d.SetId(dataResourceIdHash(zones))
@@ -298,10 +315,25 @@ func zoneIdsDescriptionAttributes(d *schema.ResourceData, zones []string) error 
 		return err
 	}
 
+	if err := d.Set("ids", zoneIds); err != nil {
+		return err
+	}
 	// create a json file in current directory and write data source to it.
 	if output, ok := d.GetOk("output_file"); ok && output.(string) != "" {
 		writeToFile(output.(string), s)
 	}
 
 	return nil
+}
+
+func splitMultiZoneId(id string) (ids []string) {
+	if !(strings.Contains(id, MULTI_IZ_SYMBOL) || strings.Contains(id, "(")) {
+		return
+	}
+	firstIndex := strings.Index(id, MULTI_IZ_SYMBOL)
+	secondIndex := strings.Index(id, "(")
+	for _, p := range strings.Split(id[secondIndex+1:len(id)-1], COMMA_SEPARATED) {
+		ids = append(ids, id[:firstIndex]+string(p))
+	}
+	return
 }

@@ -25,6 +25,7 @@ const (
 	CMSCode      = ServiceCode("CMS")
 	KMSCode      = ServiceCode("KMS")
 	OTSCode      = ServiceCode("OTS")
+	DNSCode      = ServiceCode("DNS")
 	PVTZCode     = ServiceCode("PVTZ")
 	LOGCode      = ServiceCode("LOG")
 	FCCode       = ServiceCode("FC")
@@ -34,7 +35,7 @@ const (
 	KVSTORECode  = ServiceCode("KVSTORE")
 	DATAHUBCode  = ServiceCode("DATAHUB")
 	MNSCode      = ServiceCode("MNS")
-	CLOUDAPICode = ServiceCode("CLOUDAPI")
+	CLOUDAPICode = ServiceCode("APIGATEWAY")
 	DRDSCode     = ServiceCode("DRDS")
 	LOCATIONCode = ServiceCode("LOCATION")
 )
@@ -87,7 +88,7 @@ func loadEndpoint(region string, serviceCode ServiceCode) string {
 		if endpoint.RegionIds.RegionId == string(region) {
 			for _, product := range endpoint.Products.Product {
 				if strings.ToLower(product.ProductName) == strings.ToLower(string(serviceCode)) {
-					return product.DomainName
+					return strings.TrimSpace(product.DomainName)
 				}
 			}
 		}

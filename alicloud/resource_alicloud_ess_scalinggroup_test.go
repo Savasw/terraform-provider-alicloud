@@ -118,7 +118,7 @@ func TestAccAlicloudEssScalingGroup_basic(t *testing.T) {
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckEssScalingGroupDestroy,
 		Steps: []resource.TestStep{
-			resource.TestStep{
+			{
 				Config: testAccEssScalingGroup(EcsInstanceCommonTestCase, rand1),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckEssScalingGroupExists(
@@ -134,7 +134,7 @@ func TestAccAlicloudEssScalingGroup_basic(t *testing.T) {
 				),
 			},
 
-			resource.TestStep{
+			{
 				Config: testAccEssScalingGroup_update(EcsInstanceCommonTestCase, rand2),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckEssScalingGroupExists(
@@ -168,7 +168,7 @@ func TestAccAlicloudEssScalingGroup_vpc(t *testing.T) {
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckEssScalingGroupDestroy,
 		Steps: []resource.TestStep{
-			resource.TestStep{
+			{
 				Config: testAccEssScalingGroup_vpc(EcsInstanceCommonTestCase, acctest.RandIntRange(10000, 999999)),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckEssScalingGroupExists(
@@ -207,7 +207,7 @@ func TestAccAlicloudEssScalingGroup_slb(t *testing.T) {
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckEssScalingGroupDestroy,
 		Steps: []resource.TestStep{
-			resource.TestStep{
+			{
 				Config: testAccEssScalingGroup_slb(EcsInstanceCommonTestCase, acctest.RandIntRange(10000, 999999)),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckEssScalingGroupExists(
@@ -243,7 +243,7 @@ func TestAccAlicloudEssScalingGroup_slbempty(t *testing.T) {
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckEssScalingGroupDestroy,
 		Steps: []resource.TestStep{
-			resource.TestStep{
+			{
 				Config: testAccEssScalingGroup_slbempty(EcsInstanceCommonTestCase, acctest.RandIntRange(10000, 999999)),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckEssScalingGroupExists(
@@ -270,11 +270,10 @@ func testAccCheckEssScalingGroupExists(n string, d *ess.ScalingGroup) resource.T
 
 		client := testAccProvider.Meta().(*connectivity.AliyunClient)
 		essService := EssService{client}
-		attr, err := essService.DescribeScalingGroupById(rs.Primary.ID)
-		log.Printf("[DEBUG] check scaling group %s attribute %#v", rs.Primary.ID, attr)
+		attr, err := essService.DescribeScalingGroup(rs.Primary.ID)
 
 		if err != nil {
-			return err
+			return WrapError(err)
 		}
 
 		*d = attr
@@ -291,13 +290,13 @@ func testAccCheckEssScalingGroupDestroy(s *terraform.State) error {
 			continue
 		}
 
-		if _, err := essService.DescribeScalingGroupById(rs.Primary.ID); err != nil {
+		if _, err := essService.DescribeScalingGroup(rs.Primary.ID); err != nil {
 			if NotFoundError(err) {
 				continue
 			}
-			return err
+			return WrapError(err)
 		}
-		return fmt.Errorf("Scaling group %s still exists.", rs.Primary.ID)
+		return WrapError(fmt.Errorf("Scaling group %s still exists.", rs.Primary.ID))
 	}
 
 	return nil

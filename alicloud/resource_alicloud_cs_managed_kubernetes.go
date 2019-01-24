@@ -31,42 +31,43 @@ func resourceAlicloudCSManagedKubernetes() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
-			"name": &schema.Schema{
+			"name": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				Computed:      true,
 				ValidateFunc:  validateContainerName,
 				ConflictsWith: []string{"name_prefix"},
 			},
-			"name_prefix": &schema.Schema{
+			"name_prefix": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				Default:       "Terraform-Creation",
 				ValidateFunc:  validateContainerNamePrefix,
 				ConflictsWith: []string{"name"},
 			},
-			"availability_zone": &schema.Schema{
+			"availability_zone": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
 				Computed: true,
 			},
-			"vswitch_ids": &schema.Schema{
+			"vswitch_ids": {
 				Type:     schema.TypeList,
 				Optional: true,
 				ForceNew: true,
 				Computed: true,
 				Elem: &schema.Schema{
-					Type: schema.TypeString,
+					Type:         schema.TypeString,
+					ValidateFunc: validateContainerVswitchId,
 				},
 				MaxItems: 1,
 			},
-			"new_nat_gateway": &schema.Schema{
+			"new_nat_gateway": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  true,
 			},
-			"worker_instance_types": &schema.Schema{
+			"worker_instance_types": {
 				Type:     schema.TypeList,
 				Required: true,
 				ForceNew: true,
@@ -76,7 +77,7 @@ func resourceAlicloudCSManagedKubernetes() *schema.Resource {
 				MinItems: 1,
 				MaxItems: 1,
 			},
-			"worker_numbers": &schema.Schema{
+			"worker_numbers": {
 				Type:     schema.TypeList,
 				Optional: true,
 				Elem: &schema.Schema{
@@ -86,49 +87,49 @@ func resourceAlicloudCSManagedKubernetes() *schema.Resource {
 				MinItems: 1,
 				MaxItems: 1,
 			},
-			"password": &schema.Schema{
+			"password": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				ForceNew:      true,
 				Sensitive:     true,
 				ConflictsWith: []string{"key_name"},
 			},
-			"key_name": &schema.Schema{
+			"key_name": {
 				Type:          schema.TypeString,
 				ForceNew:      true,
 				Optional:      true,
 				ConflictsWith: []string{"password"},
 			},
-			"pod_cidr": &schema.Schema{
+			"pod_cidr": {
 				Type:     schema.TypeString,
 				ForceNew: true,
 				Optional: true,
 			},
-			"service_cidr": &schema.Schema{
+			"service_cidr": {
 				Type:     schema.TypeString,
 				ForceNew: true,
 				Optional: true,
 			},
-			"cluster_network_type": &schema.Schema{
+			"cluster_network_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
 				ValidateFunc: validateAllowedStringValue([]string{ManagedKubernetesClusterNetworkTypeFlannel, ManagedKubernetesClusterNetworkTypeTerway}),
 			},
-			"image_id": &schema.Schema{
+			"image_id": {
 				Type:             schema.TypeString,
 				Optional:         true,
 				ForceNew:         true,
 				DiffSuppressFunc: imageIdSuppressFunc,
 			},
-			"worker_disk_size": &schema.Schema{
+			"worker_disk_size": {
 				Type:         schema.TypeInt,
 				Optional:     true,
 				Default:      40,
 				ForceNew:     true,
 				ValidateFunc: validateIntegerInRange(20, 32768),
 			},
-			"worker_disk_category": &schema.Schema{
+			"worker_disk_category": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
@@ -136,7 +137,7 @@ func resourceAlicloudCSManagedKubernetes() *schema.Resource {
 				ValidateFunc: validateAllowedStringValue([]string{
 					string(DiskCloudEfficiency), string(DiskCloudSSD)}),
 			},
-			"worker_data_disk_size": &schema.Schema{
+			"worker_data_disk_size": {
 				Type:             schema.TypeInt,
 				Optional:         true,
 				ForceNew:         true,
@@ -144,74 +145,74 @@ func resourceAlicloudCSManagedKubernetes() *schema.Resource {
 				ValidateFunc:     validateIntegerInRange(20, 32768),
 				DiffSuppressFunc: workerDataDiskSizeSuppressFunc,
 			},
-			"worker_data_disk_category": &schema.Schema{
+			"worker_data_disk_category": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
 				ValidateFunc: validateAllowedStringValue([]string{
 					string(DiskCloudEfficiency), string(DiskCloudSSD)}),
 			},
-			"worker_instance_charge_type": &schema.Schema{
+			"worker_instance_charge_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
 				ValidateFunc: validateInstanceChargeType,
 				Default:      PostPaid,
 			},
-			"worker_period_unit": &schema.Schema{
+			"worker_period_unit": {
 				Type:             schema.TypeString,
 				Optional:         true,
 				Default:          Month,
 				ValidateFunc:     validateInstanceChargeTypePeriodUnit,
 				DiffSuppressFunc: csKubernetesWorkerPostPaidDiffSuppressFunc,
 			},
-			"worker_period": &schema.Schema{
+			"worker_period": {
 				Type:             schema.TypeInt,
 				Optional:         true,
 				Default:          1,
 				ValidateFunc:     validateInstanceChargeTypePeriod,
 				DiffSuppressFunc: csKubernetesWorkerPostPaidDiffSuppressFunc,
 			},
-			"worker_auto_renew": &schema.Schema{
+			"worker_auto_renew": {
 				Type:             schema.TypeBool,
 				Default:          false,
 				Optional:         true,
 				DiffSuppressFunc: csKubernetesWorkerPostPaidDiffSuppressFunc,
 			},
-			"worker_auto_renew_period": &schema.Schema{
+			"worker_auto_renew_period": {
 				Type:             schema.TypeInt,
 				Optional:         true,
 				Default:          1,
 				ValidateFunc:     validateAllowedIntValue([]int{1, 2, 3, 6, 12}),
 				DiffSuppressFunc: csKubernetesWorkerPostPaidDiffSuppressFunc,
 			},
-			"install_cloud_monitor": &schema.Schema{
+			"install_cloud_monitor": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
 			},
-			"kube_config": &schema.Schema{
+			"kube_config": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"client_cert": &schema.Schema{
+			"client_cert": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"client_key": &schema.Schema{
+			"client_key": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"cluster_ca_cert": &schema.Schema{
+			"cluster_ca_cert": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
 			// 'version' is a reserved parameter and it just is used to test. No Recommendation to expose it.
-			"version": &schema.Schema{
+			"version": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"worker_nodes": &schema.Schema{
+			"worker_nodes": {
 				Type:     schema.TypeList,
 				Computed: true,
 				Elem: &schema.Resource{
@@ -231,11 +232,11 @@ func resourceAlicloudCSManagedKubernetes() *schema.Resource {
 					},
 				},
 			},
-			"security_group_id": &schema.Schema{
+			"security_group_id": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
-			"vpc_id": &schema.Schema{
+			"vpc_id": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
@@ -352,7 +353,7 @@ func resourceAlicloudCSManagedKubernetesRead(d *schema.ResourceData, meta interf
 			return csClient.DescribeKubernetesCluster(d.Id())
 		})
 		if e != nil {
-			return e
+			return fmt.Errorf("Describing kubernetes cluster %#v failed, error message: %#v. Please check cluster in the console,", d.Id(), e)
 		}
 		cluster, _ = raw.(cs.KubernetesCluster)
 		return nil
@@ -373,32 +374,46 @@ func resourceAlicloudCSManagedKubernetesRead(d *schema.ResourceData, meta interf
 	d.Set("vpc_id", cluster.VPCID)
 	d.Set("security_group_id", cluster.SecurityGroupID)
 	d.Set("key_name", cluster.Parameters.KeyPair)
-	if size, err := strconv.Atoi(cluster.Parameters.WorkerSystemDiskSize); err != nil {
+	if size, err := strconv.Atoi(cluster.Parameters.WorkerSystemDiskSize); err == nil {
 		d.Set("worker_disk_size", size)
+	} else {
+		return BuildWrapError("strconv.Atoi", d.Id(), ProviderERROR, err, "")
 	}
 	d.Set("worker_disk_category", cluster.Parameters.WorkerSystemDiskCategory)
 	d.Set("availability_zone", cluster.ZoneId)
 
 	if cluster.Parameters.WorkerInstanceChargeType == string(PrePaid) {
 		d.Set("worker_instance_charge_type", string(PrePaid))
-		d.Set("worker_period", cluster.Parameters.WorkerPeriod)
+		if period, err := strconv.Atoi(cluster.Parameters.WorkerPeriod); err != nil {
+			return BuildWrapError("strconv.Atoi", d.Id(), ProviderERROR, err, "")
+		} else {
+			d.Set("worker_period", period)
+		}
 		d.Set("worker_period_unit", cluster.Parameters.WorkerPeriodUnit)
 		d.Set("worker_auto_renew", cluster.Parameters.WorkerAutoRenew)
-		d.Set("worker_auto_renew_period", cluster.Parameters.WorkerAutoRenewPeriod)
+		if period, err := strconv.Atoi(cluster.Parameters.WorkerAutoRenewPeriod); err != nil {
+			return BuildWrapError("strconv.Atoi", d.Id(), ProviderERROR, err, "")
+		} else {
+			d.Set("worker_auto_renew_period", period)
+		}
 	} else {
 		d.Set("worker_instance_charge_type", string(PostPaid))
 	}
 
 	if cluster.Parameters.WorkerDataDisk {
-		d.Set("worker_data_disk_size", cluster.Parameters.WorkerDataDiskSize)
+		if size, err := strconv.Atoi(cluster.Parameters.WorkerDataDiskSize); err != nil {
+			return BuildWrapError("strconv.Atoi", d.Id(), ProviderERROR, err, "")
+		} else {
+			d.Set("worker_data_disk_size", size)
+		}
 		d.Set("worker_data_disk_category", cluster.Parameters.WorkerDataDiskCategory)
 	}
 
-	numOfNode, err := strconv.Atoi(cluster.Parameters.NumOfNodes)
-	if err != nil {
-		return fmt.Errorf("error convert NumOfNodes %s to int: %s", cluster.Parameters.NumOfNodes, err.Error())
+	if numOfNode, err := strconv.Atoi(cluster.Parameters.NumOfNodes); err != nil {
+		return BuildWrapError("strconv.Atoi", d.Id(), ProviderERROR, err, "")
+	} else {
+		d.Set("worker_numbers", []int{numOfNode})
 	}
-	d.Set("worker_numbers", []int{numOfNode})
 	d.Set("vswitch_ids", []string{cluster.Parameters.VSwitchID})
 	d.Set("worker_instance_types", []string{cluster.Parameters.WorkerInstanceType})
 
@@ -441,6 +456,12 @@ func resourceAlicloudCSManagedKubernetesRead(d *schema.ResourceData, meta interf
 					return nil
 				}); err != nil {
 					return resource.NonRetryableError(fmt.Errorf("[ERROR] GetManagedKubernetesClusterNodes got an error: %#v.", err))
+				}
+				for _, stableState := range cs.NodeStableClusterState {
+					// If cluster is in NodeStableClusteState, node list will not change
+					if cluster.State == stableState {
+						return nil
+					}
 				}
 				time.Sleep(5 * time.Second)
 				return resource.RetryableError(fmt.Errorf("[ERROR] There is no any nodes in ManagedKubernetes cluster %s.", d.Id()))

@@ -17,7 +17,7 @@ databases.
 ```
 resource "alicloud_db_clone" "default" {
 	instance_id = "rm-iert46599euyt679"
-	backup_id = "789965432ty678uuhh"
+	backup_id = "500213868"
 }
 ```
 
@@ -26,14 +26,15 @@ resource "alicloud_db_clone" "default" {
 The following arguments are supported:
 
 * `instance_id` - (Required) The DB Instance ID.
-* `backup_id` - (Optional) The Backup set ID. At least one of `backup_id` and `restore_time` is required.
-* `restore_time` - (Optional) The user can specify any point in the backup retention period, such as 2011-06-11T16:00:00Z. At least one of `backup_id` and `restore_time` is required.
+* `backup_id` - (Optional) The Backup set ID. Either of `backup_id` and `restore_time` is required.
+* `restore_time` - (Optional) The user can specify any point in the backup retention period, such as 2011-06-11T16:00:00Z. Either of `backup_id` and `restore_time` is required.
 * `instance_type` - (Optional) DB Instance type. For details, see [Instance type table](https://www.alibabacloud.com/help/doc-detail/26312.htm).
 * `instance_storage` - (Required) User-defined DB instance storage space. Value range:
     - [5, 2000] for MySQL HA dual node edition;
     - [20,1000] for MySQL 5.7 basic single node edition;
     Increase progressively at a rate of 5 GB. For details, see [Instance type table](https://www.alibabacloud.com/help/doc-detail/26312.htm).
-    
+
+* `instance_network_type` - (Optional) Valid values are `Classic`, `Vpc`. By default, the new instance and the master instance have the same network type.
 * `instance_charge_type` - (Optional) Valid values are `Prepaid`, `Postpaid`, Default to `Postpaid`.
 * `period` - (Optional) The duration that you will buy DB instance (in month). It is valid when instance_charge_type is `PrePaid`. Valid values: [1~9], 12, 24, 36. Default to 1.
 If it is a multi-zone and `vswitch_id` is specified, the vswitch must in the one of them.

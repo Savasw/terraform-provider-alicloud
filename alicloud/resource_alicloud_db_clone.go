@@ -58,6 +58,12 @@ func resourceAlicloudDBClone() *schema.Resource {
 				Optional: true,
 				Computed: true,
 			},
+			"instance_network_type": &schema.Schema{
+				Type:         schema.TypeString,
+				ValidateFunc: validateAllowedStringValue([]string{string(Classic), string(Vpc)}),
+				Optional:     true,
+				ForceNew:     true,
+			},
 			"vswitch_id": &schema.Schema{
 				Type:     schema.TypeString,
 				ForceNew: true,
@@ -173,15 +179,31 @@ func buildDBCloneRequest(d *schema.ResourceData, meta interface{}) (*rds.CloneDB
 	request := rds.CreateCloneDBInstanceRequest()
 	request.RegionId = string(client.Region)
 	request.DBInstanceId = Trim(d.Get("instance_id").(string))
-	request.BackupId = Trim(d.Get("backup_id").(string))
+
+	backupId, backupIdSet := d.GetOk("backup_id")
+	restoreTime, restoreTimeSet := d.GetOk("restore_time")
+
+	if !(backupIdSet || restoreTimeSet) {
+		return nil, fmt.Errorf("Either of backup_id and restore_time is required")
+	}
+	if backupIdSet && restoreTimeSet {
+		return nil, fmt.Errorf("Either of backup_id and restore_time is required")
+	}
+
+	request.BackupId = Trim(backupId.(string))
+	request.RestoreTime = Trim(restoreTime.(string))
 	request.PayType = Trim(d.Get("instance_id").(string))
-	request.DBInstanceStorage = requests.NewInteger(d.Get("instance_storage").(int))
+
+	if v, ok := d.GetOk("instance_storage"); ok {
+		request.DBInstanceStorage = requests.NewInteger(v.(int))
+	}
+
 	request.DBInstanceClass = Trim(d.Get("instance_type").(string))
 	//request.DBInstanceDescription = d.Get("instance_name").(string)
 
 	vswitchId := Trim(d.Get("vswitch_id").(string))
 
-	request.InstanceNetworkType = string(Classic)
+	request.InstanceNetworkType = Trim(d.Get("instance_network_type").(string))
 
 	if vswitchId != "" {
 		request.VSwitchId = vswitchId

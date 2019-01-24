@@ -247,6 +247,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_common_bandwidth_package_attachment": resourceAliyunCommonBandwidthPackageAttachment(),
 			"alicloud_drds_instance":                       resourceAlicloudDRDSInstance(),
 			"alicloud_db_backup":                           resourceAlicloudDBBackup(),
+			"alicloud_db_clone":                            resourceAlicloudDBClone(),
 		},
 
 		ConfigureFunc: providerConfigure,

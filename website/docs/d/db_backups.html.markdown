@@ -15,7 +15,7 @@ The `alicloud_db_backups` data source provides a collection of RDS instance back
 ```
 data "alicloud_db_backups" "db_backups" {
   instance_id = "rm-iert46599euyt679"
-  status     = "Success"
+  backup_status = "Success"
 
 }
 

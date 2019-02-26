@@ -2,6 +2,7 @@ package alicloud
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -100,7 +101,9 @@ func resourceAlicloudPvtzZoneRecordCreate(d *schema.ResourceData, meta interface
 	})
 
 	if err != nil {
+
 		if IsExceptedErrors(err, []string{RecordInvalidConflict}) {
+
 			req := pvtz.CreateDescribeZoneRecordsRequest()
 			req.ZoneId = args.ZoneId
 			req.Keyword = args.Rr
@@ -154,7 +157,7 @@ func resourceAlicloudPvtzZoneRecordUpdate(d *schema.ResourceData, meta interface
 	attributeUpdate := false
 
 	args := pvtz.CreateUpdateZoneRecordRequest()
-	recordIdStr, _, _ := getRecordIdAndZoneId(d, meta)
+	recordIdStr, zoneIdStr, _ := getRecordIdAndZoneId(d, meta)
 	recordId, _ := strconv.Atoi(recordIdStr)
 	args.RecordId = requests.NewInteger(recordId)
 	args.Rr = d.Get("resource_record").(string)
@@ -183,6 +186,9 @@ func resourceAlicloudPvtzZoneRecordUpdate(d *schema.ResourceData, meta interface
 		attributeUpdate = true
 	}
 
+	oldRr, newRr := d.GetChange("resource_record")
+	log.Printf("[DEBUG] Old Id: %s", d.Id())
+
 	if attributeUpdate {
 		client := meta.(*connectivity.AliyunClient)
 		invoker := PvtzInvoker()
@@ -193,10 +199,72 @@ func resourceAlicloudPvtzZoneRecordUpdate(d *schema.ResourceData, meta interface
 			})
 			return BuildWrapError(args.GetActionName(), d.Id(), AlibabaCloudSdkGoERROR, err, "")
 		}); err != nil {
+			//if record with same resource_record exists then check difference in other parameters
+			if IsExceptedErrors(err, []string{RecordInvalidConflict}) {
+				log.Printf("[DEBUG] Record Conflict: old: %s  new: %s", oldRr, newRr)
+				req := pvtz.CreateDescribeZoneRecordsRequest()
+				req.ZoneId = zoneIdStr
+				req.Keyword = args.Rr
+				req.PageSize = requests.NewInteger(PageSizeXLarge)
+				req.PageNumber = requests.NewInteger(1)
+				for {
+					var raw interface{}
+					//find record
+					if err := invoker.Run(func() error {
+						rep, err := client.WithPvtzClient(func(pvtzClient *pvtz.Client) (interface{}, error) {
+							return pvtzClient.DescribeZoneRecords(req)
+						})
+						raw = rep
+						return BuildWrapError(req.GetActionName(), req.ZoneId, AlibabaCloudSdkGoERROR, err, "")
+					}); err != nil {
+						log.Printf("[DEBUG] Error in describe zone records")
+						return err
+					}
+					results, _ := raw.(*pvtz.DescribeZoneRecordsResponse)
+					if results != nil && len(results.Records.Record) > 0 {
+						for _, rec := range results.Records.Record {
+							if rec.Rr == args.Rr {
+								log.Printf("[DEBUG] Exisiting found: %s", newRr)
+								//if type and value of found record matches with given args then set id and read
+								if rec.Type == args.Type && rec.Value == args.Value {
+									log.Printf("[DEBUG] All values match for and reading %s", newRr)
+									d.SetId(fmt.Sprintf("%d%s%s", rec.RecordId, COLON_SEPARATED, zoneIdStr))
+									log.Printf("[DEBUG] New Id before read: %s", d.Id())
+									return resourceAlicloudPvtzZoneRecordRead(d, meta)
+								}
+
+								//else update the found record record with new values
+								args.RecordId = requests.NewInteger(rec.RecordId)
+								if err := invoker.Run(func() error {
+									log.Printf("[DEBUG] Going for update for %s", newRr)
+									_, err := client.WithPvtzClient(func(pvtzClient *pvtz.Client) (interface{}, error) {
+										return pvtzClient.UpdateZoneRecord(args)
+									})
+									return BuildWrapError(args.GetActionName(), d.Id(), AlibabaCloudSdkGoERROR, err, "")
+								}); err != nil {
+									return err
+								}
+								//set id for existing found record
+								d.SetId(fmt.Sprintf("%d%s%s", rec.RecordId, COLON_SEPARATED, zoneIdStr))
+								log.Printf("[DEBUG] New Id after update: %s", d.Id())
+							}
+						}
+					}
+					if len(results.Records.Record) < PageSizeXLarge {
+						break
+					}
+
+					if page, err := getNextpageNumber(req.PageNumber); err != nil {
+						return err
+					} else {
+						req.PageNumber = page
+					}
+				}
+			}
 			return err
 		}
 	}
-
+	log.Printf("[DEBUG] New Id after update: %s", d.Id())
 	return resourceAlicloudPvtzZoneRecordRead(d, meta)
 
 }
